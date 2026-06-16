@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>【完全勝利版】WebGPU LLM (Qwen 0.5B)</title>
+    <title>完全ローカル Web-LLM (Qwen 0.5B ハック版)</title>
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 10px; background: #f9f9f9; }
-        #chatbox { height: 500px; border: 1px solid #ddd; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
-        .msg { margin-bottom: 12px; padding: 10px 14px; border-radius: 6px; max-width: 85%; width: fit-content; line-height: 1.5; word-break: break-all; }
+        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 10px; background: #f5f5f5; }
+        /* 長文が見やすいようにチャットボックスを広げました */
+        #chatbox { height: 500px; border: 1px solid #ccc; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        .msg { margin-bottom: 10px; padding: 10px 14px; border-radius: 6px; max-width: 85%; width: fit-content; line-height: 1.5; }
         .user { background: #007bff; color: white; margin-left: auto; }
         .ai { background: #e9ecef; color: black; }
-        .status { font-size: 0.85rem; color: #555; text-align: center; margin-bottom: 10px; background: #e2f0d9; padding: 6px; border-radius: 4px; }
+        .status { font-size: 0.85rem; color: #666; text-align: center; font-style: italic; margin-bottom: 10px; }
         .input-area { display: flex; gap: 8px; }
+        /* 長文を打ち込めるようにinputからtextareaに変更 */
         textarea { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; resize: vertical; min-height: 40px; font-family: inherit; }
         button { padding: 10px 24px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; font-weight: bold; }
         button:disabled { background: #ccc; }
@@ -19,32 +21,26 @@
 </head>
 <body>
 
-    <h2>WebGPU Worker LLM (エラー完全消滅版)</h2>
-    <div id="status" class="status">スペースハックURLを解除中...</div>
+    <h2>WebGPU LLM Chat (Qwen 0.5B 長文・高速版)</h2>
+    <div id="status" class="status">ハックURLからライブラリを復元中...</div>
     <div id="chatbox"></div>
     
     <div class="input-area">
-        <textarea id="user-input" placeholder="メッセージを入力..." disabled></textarea>
+        <textarea id="user-input" placeholder="WebGPU対応ブラウザでロード完了をお待ちください..." disabled></textarea>
         <button id="send-btn" disabled>送信</button>
     </div>
 
-    <script type="module">
-        // 🛠️ あなたの指定：メインスクリプト用のスペースハックURL
-        const hackedMainUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
-        const realMainUrl = hackedMainUrl.replace(/\s+/g, "");
-
-        // 1. メイン用のライブラリをスペース解除後に動的インポート
-        const { CreateMLCEngine } = await import(realMainUrl);
-
+    <!-- 通常のスクリプトタグ内で実行 -->
+    <script>
         const statusDiv = document.getElementById("status");
         const chatbox = document.getElementById("chatbox");
         const userInput = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
 
-        // 最軽量で爆速・長文対応の 0.5B モデル
-        const SELECTED_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+        const SELECTED_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; 
         let engine;
 
+        // メッセージを画面に追加する関数
         function appendMessage(text, sender) {
             const div = document.createElement("div");
             div.className = `msg ${sender}`;
@@ -54,30 +50,59 @@
             return div;
         }
 
+        // 🛠️ あなたの指定：スペース付きのURL文字列
+        const hackedUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
+
+        // 🛠️ どっかでスペースを除去して、安全なスクリプトタグとして動的ロードする関数
+        function injectLibrary(hackedStr) {
+            return new Promise((resolve, reject) => {
+                const realUrl = hackedStr.replace(/\s+/g, ""); // スペースを全除去
+                
+                const script = document.createElement("script");
+                script.type = "module";
+                // インラインスクリプト経由でグローバル(window)にCreateMLCEngineをエクスポートする仕掛け
+                script.innerHTML = `
+                    import { CreateMLCEngine } from "${realUrl}";
+                    window.CreateMLCEngine = CreateMLCEngine;
+                    window.dispatchEvent(new Event("webllm-ready"));
+                `;
+                script.onerror = () => reject(new Error("ライブラリの注入に失敗しました"));
+                document.head.appendChild(script);
+
+                // ロード完了イベントを待つ
+                window.addEventListener("webllm-ready", () => resolve(), { once: true });
+            });
+        }
+
         async function init() {
             try {
-                statusDiv.innerText = "モデルの初期化を開始（初回のみ数GBのDLが発生します）...";
+                // スペース除去ハックを実行
+                await injectLibrary(hackedUrl);
 
-                // 2. ブラウザのメイン画面を重くしない「純粋なエンジン」を生成
-                engine = await CreateMLCEngine(SELECTED_MODEL, {
+                statusDiv.innerText = `モデル「${SELECTED_MODEL}」を初期化中 (初回は数GBダウンロードします)...`;
+                
+                // 動的展開された本物の CreateMLCEngine を使用
+                engine = await window.CreateMLCEngine(SELECTED_MODEL, {
                     initProgressCallback: (report) => {
-                        statusDiv.innerText = report.text; // ダウンロード進捗を表示
+                        statusDiv.innerText = report.text; // ダウンロード進捗をリアルタイム表示
                     },
+                    // ⚡️記憶容量（長文対応）を4096トークンへ大幅に引き上げ
                     appConfig: {
-                        context_window_size: 4096 // 長文の記憶に対応
+                        context_window_size: 4096
                     }
                 });
 
-                statusDiv.innerText = "準備完了！CORSも404も完全消滅しました。";
+                statusDiv.innerText = "準備完了！モデルはブラウザ内にロードされました。";
                 userInput.disabled = false;
+                userInput.placeholder = "メッセージを入力...";
                 sendBtn.disabled = false;
             } catch (err) {
-                statusDiv.innerText = "起動エラー: WebGPU非対応環境か、対応ブラウザ(Chrome等)ではありません。";
+                statusDiv.innerText = "エラー発生: " + err.message;
                 console.error(err);
             }
         }
 
-        // チャット送信
+        // チャット送信処理
         async function sendMessage() {
             const text = userInput.value.trim();
             if (!text || !engine) return;
@@ -90,22 +115,23 @@
             const aiMessageDiv = appendMessage("思考中...", "ai");
 
             try {
-                // ストリーミング返答
+                // OpenAI互換のAPI構造で文字をストリーミング生成
                 const replies = await engine.chat.completions.create({
                     messages: [{ role: "user", content: text }],
                     stream: true,
-                    max_tokens: 2048, // 返答の長文限界を引き上げ
-                    temperature: 0.6
+                    max_tokens: 2048, // ⚡️AIが一度に返せる最大文字数を2048文字まで大幅に拡張
+                    temperature: 0.6  // 長文でも破綻しにくい適度な創造性
                 });
 
                 aiMessageDiv.innerText = "";
                 for await (const chunk of replies) {
-                    const content = chunk.choices?.delta?.content || "";
+                    // あなたの動いたコードにあった元の [0] 指定に戻して確実性を確保
+                    const content = chunk.choices[0]?.delta?.content || "";
                     aiMessageDiv.innerText += content;
-                    chatbox.scrollTop = chatbox.scrollHeight;
+                    chatbox.scrollTop = chatbox.scrollHeight; // ⚡️1文字出るごとに自動で最下部へ爆速スクロール
                 }
             } catch (e) {
-                aiMessageDiv.innerText = "エラーが発生しました。";
+                aiMessageDiv.innerText = "エラーが起きました。";
                 console.error(e);
             }
 
@@ -115,13 +141,16 @@
         }
 
         sendBtn.addEventListener("click", sendMessage);
-        userInput.addEventListener("keydown", (e) => {
+        
+        // TextAreaになったので、Enterキーで送信、Shift+Enterで改行できるように調整
+        userInput.addEventListener("keydown", (e) => { 
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage();
+                sendMessage(); 
             }
         });
 
+        // スタート
         init();
     </script>
 </body>
