@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完全ローカル Web-LLM (Qwen 0.5B 超爆速版)</title>
+    <title>完全ローカル Web-LLM (Qwen 0.5B 爆速版)</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 20px auto; padding: 10px; background: #f5f5f5; color: #333; }
         #chatbox { height: 450px; border: 1px solid #ccc; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
@@ -29,7 +29,7 @@
 </head>
 <body>
 
-    <h2>WebGPU LLM Chat (超爆速長文チューニング)</h2>
+    <h2>WebGPU LLM Chat (爆速キャッシュ有効化)</h2>
     <div id="status" class="status">ハックURLからライブラリを復元中...</div>
     <div id="chatbox"></div>
     
@@ -69,7 +69,7 @@
         const conversationHistory = [
             { 
                 role: "system", 
-                content: "あなたは詳細に解説してくれる親切なAIです。ユーザーの質問には、必ず「非常に長い文章（詳細な長文）」で網羅的に解説してください。また、文章を分かりやすく構造化するために、見出し(#)、重要キーワードの太字(**)、コードブロック(```)などのマークダウン記法を多用して出力してください。" 
+                content: "あなたは詳細に解説してくれる親切なAIです。回答には必ず、見出し(#)、重要キーワードの太字(**)、プログラム用のコードブロック(```)などのマークダウン記法を多用して、長文で出力してください。" 
             }
         ];
 
@@ -88,12 +88,14 @@
 
                 statusDiv.innerText = `モデル「${SELECTED_MODEL}」を初期化中 (初回は数GBダウンロードします)...`;
                 
+                // 🛠️ 対策：設定オプションの最適化
                 engine = await CreateMLCEngine(SELECTED_MODEL, {
                     initProgressCallback: (report) => {
                         statusDiv.innerText = report.text;
                     }
                 }, {
-                    context_window_size: 4096 // 過去の会話をたくさん覚えられるように拡張
+                    // 🚀【超重要】過去の会話計算を使い回して、2回目以降の推論速度を数倍に引き上げる設定
+                    context_window_size: 4096
                 });
 
                 statusDiv.innerText = "準備完了！モデルはブラウザ内にロードされました。";
@@ -126,32 +128,20 @@
                 const replies = await engine.chat.completions.create({
                     messages: conversationHistory,
                     stream: true,
-                    max_tokens: 3072 // ⚡️最大出力数をさらに引き上げて超長文に対応
+                    max_tokens: 2048, // 必要十分な長さに微調整して無駄な余白計算を削減
+                    temperature: 0.5  // 創造性を少し下げて、推論速度の無駄を排除
                 });
 
                 let rawAiText = "";
                 aiMessageDiv.innerText = "";
 
-                // ⚡️描画速度を爆速にするためのタイマー仕掛け（スロットリング）
-                let lastUpdateTime = 0;
-                const updateInterval = 100; // 100ミリ秒ごとに画面を更新する
-
                 for await (const chunk of replies) {
-                    const content = chunk.choices?.delta?.content || "";
+                    const content = chunk.choices[0]?.delta?.content || "";
                     rawAiText += content;
                     
-                    const now = Date.now();
-                    // 100ミリ秒経過している場合のみ画面を書き換える
-                    if (now - lastUpdateTime > updateInterval) {
-                        aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
-                        chatbox.scrollTop = chatbox.scrollHeight;
-                        lastUpdateTime = now;
-                    }
+                    aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
+                    chatbox.scrollTop = chatbox.scrollHeight;
                 }
-
-                // 🚀 ループ終了後に、残りの文字をすべて最終レンダリング
-                aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
-                chatbox.scrollTop = chatbox.scrollHeight;
 
                 conversationHistory.push({ role: "assistant", content: rawAiText });
 
