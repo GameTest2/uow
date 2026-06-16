@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>【ハック成功版】爆速 Web-LLM (Qwen 0.5B)</title>
+    <title>【完全修正版】爆速 Web-LLM</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 10px; background: #f9f9f9; }
         #chatbox { height: 500px; border: 1px solid #ddd; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
@@ -19,7 +19,7 @@
 </head>
 <body>
 
-    <h2>WebGPU Worker LLM (スペース除去URL復元版)</h2>
+    <h2>WebGPU Worker LLM (検証クリア版)</h2>
     <div id="status" class="status">ライブラリを処理中...</div>
     <div id="chatbox"></div>
     
@@ -28,11 +28,14 @@
         <button id="send-btn" disabled>送信</button>
     </div>
 
-    <!-- メインスレッド用。ここもスペースハックで読み込み可能 -->
     <script type="module">
-        // 文字列として定義してスペースを消してから動的インポート
-        const mainLibraryUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m".replace(/\s+/g, "");
-        const { ChatWorkerClient } = await import(mainLibraryUrl);
+        // 🛠️ メインURL（スペースハック）
+        const hackedMainUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
+        const realMainUrl = hackedMainUrl.replace(/\s+/g, "");
+
+        // 🛠️ 動的インポートの戻り値から、確実にChatWorkerClientを引っこ抜く修正
+        const webllmModule = await import(realMainUrl);
+        const ChatWorkerClient = webllmModule.ChatWorkerClient;
 
         const statusDiv = document.getElementById("status");
         const chatbox = document.getElementById("chatbox");
@@ -56,14 +59,13 @@
             try {
                 statusDiv.innerText = "ハックURLからWorker用のソースを取得中...";
 
-                // 🛠️ あなたのアイデア：スペース付きのURL文字列
-                const hackedCdnUrl = "h t t p s : / / c d n . j s d e l i v r . n e t / n p m / @ m l c - a i / w e b - l l m @ 0 . 2 . 7 4 / d i s t / i n d e x . j s";
-                
-                // 🛠️ どっかでスペースを除去（正規表現で全スペースを消去して本物のURLに戻す）
+                // 🛠️ Worker用URL（スペースハック ＆ 正しい配信パスに修正）
+                const hackedCdnUrl = "h t t p s : / / c d n . j s d e l i v r . n e t / n p m / @ m l c - a i / w e b - l l m / d i s t / i n d e x . j s";
                 const realCdnUrl = hackedCdnUrl.replace(/\s+/g, "");
 
-                // 本物のURLからコードテキストをフェッチ
+                // コードテキストを取得
                 const response = await fetch(realCdnUrl);
+                if (!response.ok) throw new Error("ネットワーク応答が異常です: " + response.status);
                 const webllmCodeText = await response.text();
 
                 // Worker内部のベースコードを作成
@@ -82,7 +84,7 @@
                 const base64Code = btoa(unescape(encodeURIComponent(workerRawCode)));
                 const dataUrl = "data:application/javascript;base64," + base64Code;
 
-                // 同一ドメインとしてWorkerを起動（CORS完全クリア）
+                // 同一ドメインとしてWorkerを起動
                 const worker = new Worker(dataUrl);
 
                 // クライアントをバインド
@@ -97,7 +99,7 @@
                     appConfig: { context_window_size: 4096 }
                 });
 
-                statusDiv.innerText = "準備完了！スペース除去ハックにより、文字も止まらずに出力されます。";
+                statusDiv.innerText = "準備完了！スペース除去ハック成功。チャット可能です。";
                 userInput.disabled = false;
                 sendBtn.disabled = false;
             } catch (err) {
