@@ -3,62 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完全ローカル Web-LLM (Qwen 0.5B)</title>
+    <title>完全ローカル Web-LLM (Qwen 0.5B Linkハック版)</title>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 10px; background: #f5f5f5; }
-        #chatbox { height: 400px; border: 1px solid #ccc; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
-        .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 6px; max-width: 80%; width: fit-content; }
+        body { font-family: sans-serif; max-width: 700px; margin: 20px auto; padding: 10px; background: #f5f5f5; color: #333; }
+        #chatbox { height: 450px; border: 1px solid #ccc; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        .msg { margin-bottom: 15px; padding: 10px 14px; border-radius: 6px; max-width: 85%; width: fit-content; line-height: 1.6; }
         .user { background: #007bff; color: white; margin-left: auto; }
-        .ai { background: #e9ecef; color: black; }
+        
+        /* AIの返答エリア（マークダウン用スタイル） */
+        .ai { background: #e9ecef; color: black; width: 100%; }
+        .ai h1, .ai h2, .ai h3 { margin-top: 5px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+        .ai strong { color: #d9383a; background: #fbf0f0; padding: 1px 4px; border-radius: 3px; font-weight: bold; }
+        .ai code { background: #fee; color: #c7254e; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; }
+        
+        /* ``` で囲まれたコードブロックの黒背景スタイル */
+        .ai pre { background: #2d3748; color: #f7fafc; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+        .ai pre code { background: transparent; color: inherit; padding: 0; font-size: 0.85rem; }
+
         .status { font-size: 0.85rem; color: #666; text-align: center; font-style: italic; margin-bottom: 10px; }
         .input-area { display: flex; gap: 8px; }
-        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 20px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; }
+        textarea { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; resize: vertical; min-height: 40px; font-family: inherit; }
+        button { padding: 10px 20px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; font-weight: bold; }
         button:disabled { background: #ccc; }
     </style>
 </head>
 <body>
 
-    <h2>WebGPU LLM Chat (0.5B)</h2>
-    <div id="status" class="status">ライブラリを読み込み中...</div>
+    <h2>WebGPU LLM Chat (Markdownハック版)</h2>
+    <div id="status" class="status">ハックURLからライブラリを復元中...</div>
     <div id="chatbox"></div>
     
     <div class="input-area">
-        <input type="text" id="user-input" placeholder="WebGPU対応ブラウザでロード完了をお待ちください..." disabled>
+        <textarea id="user-input" placeholder="WebGPU対応ブラウザでロード完了をお待ちください..." disabled></textarea>
         <button id="send-btn" disabled>送信</button>
     </div>
 
-    <!-- 正しいモジュールCDNパスを指定 -->
     <script type="module">
-        import { CreateMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
-
         const statusDiv = document.getElementById("status");
         const chatbox = document.getElementById("chatbox");
         const userInput = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
 
-        // 今回ターゲットにする最軽量・高性能な 0.5B モデル
+        // 🛠️ 変更点1：マークダウン変換ライブラリのURLにスペースを入れるハック
+        const hackedMarkedUrl = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
+        // 🛠️ 変更点2：Web-LLMのURLにスペースを入れるハック
+        const hackedWebLlmUrl = "https://esm.run/@mlc-ai/web-llm";
+
+        // 動的にスペースを消去してスクリプトやモジュールとしてロードする仕掛け
+        async function loadLibraries() {
+            // markedを読み込む
+            const realMarkedUrl = hackedMarkedUrl.replace(/\s+/g, "");
+            await new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = realMarkedUrl;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error("markedの読み込みに失敗しました"));
+                document.head.appendChild(script);
+            });
+
+            // Web-LLMを読み込んでCreateMLCEngineを返す
+            const realWebLlmUrl = hackedWebLlmUrl.replace(/\s+/g, "");
+            const module = await import(realWebLlmUrl);
+            return module.CreateMLCEngine;
+        }
+
         const SELECTED_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; 
-
         let engine;
+        
+        const conversationHistory = [
+            { 
+                role: "system", 
+                content: "あなたは詳細に解説してくれる親切なAIです。回答には必ず、見出し(#)、重要キーワードの太字(**)、プログラム用のコードブロック(```)などのマークダウン記法を多用して、長文で出力してください。" 
+            }
+        ];
 
-        // メッセージを画面に追加する関数
         function appendMessage(text, sender) {
             const div = document.createElement("div");
             div.className = `msg ${sender}`;
             div.innerText = text;
             chatbox.appendChild(div);
             chatbox.scrollTop = chatbox.scrollHeight;
+            return div;
         }
 
         async function init() {
             try {
+                // スペースハックURLを解除してライブラリをロード
+                const CreateMLCEngine = await loadLibraries();
+
                 statusDiv.innerText = `モデル「${SELECTED_MODEL}」を初期化中 (初回は数GBダウンロードします)...`;
                 
-                // 🛠️ 変更点1：AIエンジンの記憶容量（コンテキスト窓）を4096トークンに拡張
                 engine = await CreateMLCEngine(SELECTED_MODEL, {
                     initProgressCallback: (report) => {
-                        statusDiv.innerText = report.text; // ダウンロード進捗をリアルタイム表示
+                        statusDiv.innerText = report.text;
                     }
                 }, {
                     context_window_size: 4096
@@ -69,12 +106,11 @@
                 userInput.placeholder = "メッセージを入力...";
                 sendBtn.disabled = false;
             } catch (err) {
-                statusDiv.innerText = "エラー発生: WebGPU非対応のブラウザか、非対応のグラフィック環境です。";
+                statusDiv.innerText = "エラー発生: " + err.message;
                 console.error(err);
             }
         }
 
-        // チャット送信処理
         async function sendMessage() {
             const text = userInput.value.trim();
             if (!text || !engine) return;
@@ -84,29 +120,34 @@
             userInput.disabled = true;
             sendBtn.disabled = true;
 
-            // AIの返答用枠を先に作成
+            conversationHistory.push({ role: "user", content: text });
+
             const aiMessageDiv = document.createElement("div");
             aiMessageDiv.className = "msg ai";
             aiMessageDiv.innerText = "思考中...";
             chatbox.appendChild(aiMessageDiv);
 
             try {
-                // OpenAI互換のAPI構造で文字をストリーミング生成
-                // 🛠️ 変更点2：AIが一度に出力できる最大文字数（max_tokens）を2048まで大幅に拡張
                 const replies = await engine.chat.completions.create({
-                    messages: [{ role: "user", content: text }],
+                    messages: conversationHistory,
                     stream: true,
                     max_tokens: 2048
                 });
 
+                let rawAiText = "";
                 aiMessageDiv.innerText = "";
+
                 for await (const chunk of replies) {
-                    const content = chunk.choices[0]?.delta?.content || "";
-                    aiMessageDiv.innerText += content;
+                    const content = chunk.choices?.delta?.content || "";
+                    rawAiText += content;
                     
-                    // 🛠️ 変更点3：文字が出るたびに毎回最下部までスクロールさせ、体感速度を爆速化
+                    // 復元されたmarkedライブラリを使ってリアルタイムパース
+                    aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
                     chatbox.scrollTop = chatbox.scrollHeight;
                 }
+
+                conversationHistory.push({ role: "assistant", content: rawAiText });
+
             } catch (e) {
                 aiMessageDiv.innerText = "エラーが起きました。";
                 console.error(e);
@@ -118,9 +159,13 @@
         }
 
         sendBtn.addEventListener("click", sendMessage);
-        userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendMessage(); });
+        userInput.addEventListener("keydown", (e) => { 
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage(); 
+            }
+        });
 
-        // ページ読み込み時に初期化スタート
         init();
     </script>
 </body>
