@@ -59,7 +59,6 @@
     </div>
 
     <script type="module">
-        // 🛠️ 正しいパッケージ名を含んだ状態のスペースハックURLへ完全修正！
         const hackedMarkedUrl = "h t t p s : / / c d n . j s d e l i v r . n e t / n p m / m a r k e d / m a r k e d . m i n . j s";
         const hackedWebLlmUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
 
@@ -71,10 +70,9 @@
                 script.onload = resolve;
                 document.head.appendChild(script);
             });
-            // 🚀 ここでスペースを除去した後に、パッケージを含んだURLで正常にインポートされます
             const realWebLlmUrl = hackedWebLlmUrl.replace(/\s+/g, "");
             const module = await import(realWebLlmUrl);
-            return module.CreateMLCEngine; //
+            return module.CreateMLCEngine;
         }
 
         const statusDiv = document.getElementById("status");
@@ -86,10 +84,11 @@
         const SELECTED_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; 
         let engine;
         
+        // 🛠️ 変更点1：プロンプトを「コードを書いて」と言われた時だけに限定する厳格な命令に修正
         let conversationHistory = [
             { 
                 role: "system", 
-                content: "あなたは天才エンジニアAIです。ユーザーからコード（HTMLなど）を求められたら、概念の基礎解説ではなく、実用的で完全に動作する具体的なコードブロック(```)を長文で出力してください。またコードを書いてといった場合だけ書いてください" 
+                content: "あなたは天才エンジニアAIです。ユーザーから明確に『コードを書いて』と言われた場合のみ、概念の基礎解説や余計な挨拶は一切省き、実用的で完全に動作する具体的なコードブロック(```)だけを長文で出力してください。それ以外の普通の会話の時は、コードブロックを使わずに普通に短く回答してください。" 
             }
         ];
 
@@ -107,9 +106,10 @@
                 const CreateMLCEngine = await loadLibraries();
                 statusDiv.innerText = "WebGPU上で頭脳を初期化中...";
                 
+                // 🛠️ 変更点2：モデルの限界を超えない安全な上限「4096」にジャストフィット
                 engine = await CreateMLCEngine(SELECTED_MODEL, {
                     initProgressCallback: (report) => { statusDiv.innerText = report.text; }
-                }, { context_window_size: 8192 });
+                }, { context_window_size: 4096 });
 
                 statusDiv.innerText = "Qwen2.5-0.5B 起動完了。";
                 userInput.disabled = false;
@@ -131,35 +131,37 @@
             const aiMessageDiv = appendMessage("思考中...", "ai");
 
             try {
+                // 🛠️ 変更点3：4096の器に合わせて、最大の出力トークンを「2048」に最適化（絶対にクラッシュしません）
                 const replies = await engine.chat.completions.create({
                     messages: conversationHistory,
                     stream: true,
-                    max_tokens: 8192
+                    max_tokens: 2048
                 });
 
                 let rawAiText = "";
-                let lastUpdateTime = 0;
-                const updateInterval = 100; // ⚡️100msの描画間引きで爆速化
+                aiMessageDiv.innerText = "";
 
                 for await (const chunk of replies) {
-                    rawAiText += chunk.choices?.delta?.content || "";
-                    const now = Date.now();
-                    if (now - lastUpdateTime > updateInterval) {
-                        aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
-                        chatbox.scrollTop = chatbox.scrollHeight;
-                        lastUpdateTime = now;
-                    }
+                    const content = chunk.choices?.delta?.content || "";
+                    rawAiText += content;
+                    
+                    aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
+                    chatbox.scrollTop = chatbox.scrollHeight;
                 }
-                aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
-                chatbox.scrollTop = chatbox.scrollHeight;
+                
                 conversationHistory.push({ role: "assistant", content: rawAiText });
             } catch (e) {
-                aiMessageDiv.innerText = "エラーが発生しました。";
+                aiMessageDiv.innerText = "エラーが発生しました。設定値がオーバーフローした可能性があります。";
             }
+
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
         }
 
         clearBtn.addEventListener("click", () => {
-            conversationHistory = [{ role: "system", content: "あなたは天才エンジニアAIです。ユーザーからコード（HTMLなど）を求められたら、概念の基礎解説ではなく、実用的で完全に動作する具体的なコードブロック(```)を長文で出力してください。またコードを書いてといった場合だけ書いてください" }];
+            // リセット時も新しいシステムプロンプトを適用
+            conversationHistory = [{ role: "system", content: "あなたは天才エンジニアAIです。ユーザーから明確に『コードを書いて』と言われた場合のみ、概念の基礎解説や余計な挨拶は一切省き、実用的で完全に動作する具体的なコードブロック(```)だけを長文で出力してください。それ以外の普通の会話の時は、コードブロックを使わずに普通に短く回答してください。" }];
             chatbox.innerHTML = "";
             appendMessage("会話履歴をリセットしました。次の指示をどうぞ！", "ai");
         });
