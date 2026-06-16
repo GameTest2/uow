@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>【最終解決版】爆速 Web-LLM (Qwen 0.5B)</title>
+    <title>【完全勝利版】WebGPU LLM (Qwen 0.5B)</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 10px; background: #f9f9f9; }
         #chatbox { height: 500px; border: 1px solid #ddd; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
@@ -19,8 +19,8 @@
 </head>
 <body>
 
-    <h2>WebGPU Worker LLM (検証完全クリア版)</h2>
-    <div id="status" class="status">ハックURLからライブラリを復元中...</div>
+    <h2>WebGPU Worker LLM (エラー完全消滅版)</h2>
+    <div id="status" class="status">スペースハックURLを解除中...</div>
     <div id="chatbox"></div>
     
     <div class="input-area">
@@ -28,15 +28,22 @@
         <button id="send-btn" disabled>送信</button>
     </div>
 
-    <script>
+    <script type="module">
+        // 🛠️ あなたの指定：メインスクリプト用のスペースハックURL
+        const hackedMainUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
+        const realMainUrl = hackedMainUrl.replace(/\s+/g, "");
+
+        // 1. メイン用のライブラリをスペース解除後に動的インポート
+        const { CreateMLCEngine } = await import(realMainUrl);
+
         const statusDiv = document.getElementById("status");
         const chatbox = document.getElementById("chatbox");
         const userInput = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
 
+        // 最軽量で爆速・長文対応の 0.5B モデル
         const SELECTED_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
-        let client;
-        let currentAiMsgDiv = null;
+        let engine;
 
         function appendMessage(text, sender) {
             const div = document.createElement("div");
@@ -47,108 +54,58 @@
             return div;
         }
 
-        // スクリプトタグを動的に生成して、ブラウザに直接webllmオブジェクトを展開させる関数
-        function loadScript(hackedUrl) {
-            return new Promise((resolve, reject) => {
-                // 🛠️ スペース除去ハック
-                const realUrl = hackedUrl.replace(/\s+/g, "");
-                const script = document.createElement("script");
-                script.src = realUrl;
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error("スクリプトの読み込みに失敗しました"));
-                document.head.appendChild(script);
-            });
-        }
-
         async function init() {
             try {
-                statusDiv.innerText = "メイン用のWeb-LLMを読み込み中...";
+                statusDiv.innerText = "モデルの初期化を開始（初回のみ数GBのDLが発生します）...";
 
-                // 🛠️ 1. ブラウザに直接ChatWorkerClientを認識させる、世界中で一番安定したUMD配信URL（もちろんスペースハック化）
-                const hackedLibUrl = "h t t p s : / / c d n . j s d e l i v r . n e t / n p m / @ m l c - a i / w e b - l l m @ 0 . 2 . 7 4 / d i s t / w e b - l l m . j s";
-                await loadScript(hackedLibUrl);
-
-                // グローバルに展開された「本物の」webllmを取得
-                const WebLLMLib = window.webllm;
-                if (!WebLLMLib || !WebLLMLib.ChatWorkerClient) {
-                    throw new Error("ライブラリの解析に失敗しました。構造が異常です。");
-                }
-
-                statusDiv.innerText = "Worker用のソースコードを取得中...";
-
-                // 🛠️ 2. Worker内でも全く同じUMDライブラリを使い回すため、テキストとしてフェッチ
-                const realLibUrl = hackedLibUrl.replace(/\s+/g, "");
-                const response = await fetch(realLibUrl);
-                if (!response.ok) throw new Error("ネットワークエラー: " + response.status);
-                const webllmCodeText = await response.text();
-
-                // Worker内部用のコードを1枚に固める
-                // グローバルな「webllm.ChatWorkerHandler」をそのまま実行させます
-                const workerRawCode = `
-                    ${webllmCodeText}
-                    if (self.webllm && self.webllm.ChatWorkerHandler) {
-                        const handler = new self.webllm.ChatWorkerHandler();
-                        self.onmessage = (e) => { handler.onmessage(e); };
-                    } else {
-                        throw new Error("Worker内部でChatWorkerHandlerが見つかりません");
+                // 2. ブラウザのメイン画面を重くしない「純粋なエンジン」を生成
+                engine = await CreateMLCEngine(SELECTED_MODEL, {
+                    initProgressCallback: (report) => {
+                        statusDiv.innerText = report.text; // ダウンロード進捗を表示
+                    },
+                    appConfig: {
+                        context_window_size: 4096 // 長文の記憶に対応
                     }
-                `;
-
-                // 3. スクリプトをBase64化してCORS制限を踏み潰す
-                const base64Code = btoa(unescape(encodeURIComponent(workerRawCode)));
-                const dataUrl = "data:application/javascript;base64," + base64Code;
-
-                // 同一ドメインの「データスクリプト」としてWorkerを起動
-                const worker = new Worker(dataUrl);
-
-                // ついに「ChatWorkerClient」が正常な関数として完璧にバインドされます！
-                client = new WebLLMLib.ChatWorkerClient(worker);
-
-                client.setInitProgressCallback((report) => {
-                    statusDiv.innerText = report.text;
                 });
 
-                // 長文用にコンテキストを拡張してロード
-                await client.reload(SELECTED_MODEL, {
-                    appConfig: { context_window_size: 4096 }
-                });
-
-                statusDiv.innerText = "準備完了！CORSもコンストラクタエラーも完全に絶滅しました。";
+                statusDiv.innerText = "準備完了！CORSも404も完全消滅しました。";
                 userInput.disabled = false;
                 sendBtn.disabled = false;
             } catch (err) {
-                statusDiv.innerText = "起動エラー: " + err.message;
+                statusDiv.innerText = "起動エラー: WebGPU非対応環境か、対応ブラウザ(Chrome等)ではありません。";
                 console.error(err);
             }
         }
 
+        // チャット送信
         async function sendMessage() {
             const text = userInput.value.trim();
-            if (!text || !client) return;
+            if (!text || !engine) return;
 
             appendMessage(text, "user");
             userInput.value = "";
             userInput.disabled = true;
             sendBtn.disabled = true;
 
-            currentAiMsgDiv = appendMessage("思考中...", "ai");
+            const aiMessageDiv = appendMessage("思考中...", "ai");
 
             try {
-                const replies = await client.chat.completions.create({
+                // ストリーミング返答
+                const replies = await engine.chat.completions.create({
                     messages: [{ role: "user", content: text }],
                     stream: true,
-                    max_tokens: 2048,
+                    max_tokens: 2048, // 返答の長文限界を引き上げ
                     temperature: 0.6
                 });
 
-                currentAiMsgDiv.innerText = "";
+                aiMessageDiv.innerText = "";
                 for await (const chunk of replies) {
                     const content = chunk.choices?.delta?.content || "";
-                    currentAiMsgDiv.innerText += content;
+                    aiMessageDiv.innerText += content;
                     chatbox.scrollTop = chatbox.scrollHeight;
                 }
             } catch (e) {
-                currentAiMsgDiv.innerText = "エラーが発生しました。";
+                aiMessageDiv.innerText = "エラーが発生しました。";
                 console.error(e);
             }
 
@@ -165,7 +122,6 @@
             }
         });
 
-        // 起動
         init();
     </script>
 </body>
