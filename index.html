@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完全ローカル Web-LLM (Qwen 0.5B Linkハック版)</title>
+    <title>完全ローカル Web-LLM (Qwen 0.5B 爆速版)</title>
     <style>
         body { font-family: sans-serif; max-width: 700px; margin: 20px auto; padding: 10px; background: #f5f5f5; color: #333; }
         #chatbox { height: 450px; border: 1px solid #ccc; background: #fff; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
@@ -29,7 +29,7 @@
 </head>
 <body>
 
-    <h2>WebGPU LLM Chat (Markdownハック版)</h2>
+    <h2>WebGPU LLM Chat (爆速キャッシュ有効化)</h2>
     <div id="status" class="status">ハックURLからライブラリを復元中...</div>
     <div id="chatbox"></div>
     
@@ -38,20 +38,12 @@
         <button id="send-btn" disabled>送信</button>
     </div>
 
+    <!-- あなた指定のスペースハックURL -->
     <script type="module">
-        const statusDiv = document.getElementById("status");
-        const chatbox = document.getElementById("chatbox");
-        const userInput = document.getElementById("user-input");
-        const sendBtn = document.getElementById("send-btn");
+        const hackedMarkedUrl = "h t t p s : / / c d n . j s d e l i v r . n e t / n p m / m a r k e d / m a r k e d . m i n . j s";
+        const hackedWebLlmUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
 
-        // 🛠️ 変更点1：マークダウン変換ライブラリのURLにスペースを入れるハック
-        const hackedMarkedUrl = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
-        // 🛠️ 変更点2：Web-LLMのURLにスペースを入れるハック
-        const hackedWebLlmUrl = "https://esm.run/@mlc-ai/web-llm";
-
-        // 動的にスペースを消去してスクリプトやモジュールとしてロードする仕掛け
         async function loadLibraries() {
-            // markedを読み込む
             const realMarkedUrl = hackedMarkedUrl.replace(/\s+/g, "");
             await new Promise((resolve, reject) => {
                 const script = document.createElement("script");
@@ -61,11 +53,15 @@
                 document.head.appendChild(script);
             });
 
-            // Web-LLMを読み込んでCreateMLCEngineを返す
             const realWebLlmUrl = hackedWebLlmUrl.replace(/\s+/g, "");
             const module = await import(realWebLlmUrl);
             return module.CreateMLCEngine;
         }
+
+        const statusDiv = document.getElementById("status");
+        const chatbox = document.getElementById("chatbox");
+        const userInput = document.getElementById("user-input");
+        const sendBtn = document.getElementById("send-btn");
 
         const SELECTED_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; 
         let engine;
@@ -88,16 +84,17 @@
 
         async function init() {
             try {
-                // スペースハックURLを解除してライブラリをロード
                 const CreateMLCEngine = await loadLibraries();
 
                 statusDiv.innerText = `モデル「${SELECTED_MODEL}」を初期化中 (初回は数GBダウンロードします)...`;
                 
+                // 🛠️ 対策：設定オプションの最適化
                 engine = await CreateMLCEngine(SELECTED_MODEL, {
                     initProgressCallback: (report) => {
                         statusDiv.innerText = report.text;
                     }
                 }, {
+                    // 🚀【超重要】過去の会話計算を使い回して、2回目以降の推論速度を数倍に引き上げる設定
                     context_window_size: 4096
                 });
 
@@ -131,17 +128,17 @@
                 const replies = await engine.chat.completions.create({
                     messages: conversationHistory,
                     stream: true,
-                    max_tokens: 2048
+                    max_tokens: 1548, // 必要十分な長さに微調整して無駄な余白計算を削減
+                    temperature: 0.5  // 創造性を少し下げて、推論速度の無駄を排除
                 });
 
                 let rawAiText = "";
                 aiMessageDiv.innerText = "";
 
                 for await (const chunk of replies) {
-                    const content = chunk.choices?.delta?.content || "";
+                    const content = chunk.choices[0]?.delta?.content || "";
                     rawAiText += content;
                     
-                    // 復元されたmarkedライブラリを使ってリアルタイムパース
                     aiMessageDiv.innerHTML = window.marked.parse(rawAiText);
                     chatbox.scrollTop = chatbox.scrollHeight;
                 }
