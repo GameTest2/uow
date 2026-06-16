@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>プレミアム AI チャットダッシュボード</title>
     <style>
-        /* 🛠️ 完全にモダンなChatGPT風のダークテーマUI */
         :root {
             --bg-main: #131314;
             --bg-sidebar: #1e1f20;
@@ -17,30 +16,20 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
-        
-        /* サイドバー構造 */
         #sidebar { width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 15px; gap: 15px; }
         .new-btn { background: #2d2f31; border: 1px solid var(--border-color); color: var(--text-main); padding: 12px; border-radius: 20px; font-weight: bold; cursor: pointer; text-align: center; font-size: 0.9rem; }
         .new-btn:hover { background: #3c3d3f; }
         .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: #c4c7c5; }
-
-        /* メインチャットエリア */
         #main-container { flex: 1; display: flex; flex-direction: column; height: 100vh; position: relative; }
         #chatbox { flex: 1; overflow-y: auto; padding: 30px 20px; display: flex; flex-direction: column; gap: 24px; max-width: 800px; width: 100%; margin: 0 auto; }
-        
-        /* 吹き出しのデザイン最適化 */
         .msg { padding: 16px 20px; border-radius: 12px; max-width: 90%; width: fit-content; line-height: 1.6; font-size: 0.95rem; }
         .user { background: var(--bg-user); align-self: flex-end; color: #fff; }
         .ai { background: transparent; align-self: flex-start; width: 100%; border-bottom: 1px solid #2d2f31; border-radius: 0; padding-left: 0; padding-right: 0; }
-        
-        /* マークダウン表示の装飾 */
         .ai h1, .ai h2, .ai h3 { margin: 15px 0 10px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; }
         .ai strong { color: var(--accent-color); font-weight: bold; }
         .ai code { background: #282a36; color: #ff79c6; padding: 3px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; }
         .ai pre { background: #1e1e1e; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 12px 0; border: 1px solid var(--border-color); }
         .ai pre code { background: transparent; color: #f8f8f2; padding: 0; font-size: 0.85rem; }
-
-        /* 入力エリア */
         .input-outer { width: 100%; max-width: 800px; margin: 0 auto; padding: 0 20px 24px 20px; background: var(--bg-main); }
         .input-area { display: flex; gap: 10px; background: #202124; border: 1px solid var(--border-color); border-radius: 28px; padding: 8px 16px; align-items: flex-end; }
         textarea { flex: 1; background: transparent; border: none; color: var(--text-main); resize: none; height: 24px; max-height: 200px; font-family: inherit; font-size: 1rem; outline: none; padding-top: 2px; }
@@ -51,18 +40,15 @@
 </head>
 <body>
 
-    <!-- 左側サイドバー（履歴スペース） -->
     <div id="sidebar">
         <div class="new-btn" id="clear-btn">🔄 会話をリセット</div>
         <div class="history-list">
-            <div style="opacity: 0.5; padding: 10px; text-align: center;">会話履歴 (ローカル保存可能)</div>
+            <div style="opacity: 0.5; padding: 10px; text-align: center;">会話履歴</div>
         </div>
     </div>
 
-    <!-- 右側メイン画面 -->
     <div id="main-container">
         <div id="chatbox"></div>
-        
         <div class="input-outer">
             <div class="input-area">
                 <textarea id="user-input" placeholder="AIに高度なHTMLコードを書かせてみよう..." disabled></textarea>
@@ -73,9 +59,9 @@
     </div>
 
     <script type="module">
-        // あなたが完成させたURLスペースハックを完全継承
+        // 🛠️ 301を起こさないように「末尾に / + e s m」を付け足したURLハック
         const hackedMarkedUrl = "h t t p s : / / c d n . j s d e l i v r . n e t / n p m / m a r k e d / m a r k e d . m i n . j s";
-        const hackedWebLlmUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m";
+        const hackedWebLlmUrl = "h t t p s : / / e s m . r u n / @ m l c - a i / w e b - l l m / + e s m";
 
         async function loadLibraries() {
             const realMarkedUrl = hackedMarkedUrl.replace(/\s+/g, "");
@@ -102,7 +88,7 @@
         let conversationHistory = [
             { 
                 role: "system", 
-                content: "あなたは天才エンジニアAIです。ユーザーからコード（HTMLなど）を求められたら、概念の基礎解説ではなく、実用的で完全に動作する具体的なコードブロック(```)を長文で出力してください。また、コードを書くなどのことを言われたら書くようにしてください。" 
+                content: "あなたは天才エンジニアAIです。ユーザーからコード（HTMLなど）を求められたら、概念の基礎解説ではなく、実用的で完全に動作する具体的なコードブロック(```)を長文で出力してください。" 
             }
         ];
 
@@ -171,9 +157,8 @@
             }
         }
 
-        // 会話クリア機能の紐付け
         clearBtn.addEventListener("click", () => {
-            conversationHistory = [conversationHistory[0]];
+            conversationHistory = [{ role: "system", content: "あなたは天才エンジニアAIです。ユーザーからコード（HTMLなど）を求められたら、概念の基礎解説ではなく、実用的で完全に動作する具体的なコードブロック(```)を長文で出力してください。またコード書いてなどと言われないなら書かなくていいです" }];
             chatbox.innerHTML = "";
             appendMessage("会話履歴をリセットしました。次の指示をどうぞ！", "ai");
         });
@@ -182,7 +167,6 @@
         userInput.addEventListener("keydown", (e) => { 
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         });
-        // 入力欄の自動改行自動伸縮
         userInput.addEventListener("input", function() {
             this.style.height = "24px";
             this.style.height = this.scrollHeight - 10 + "px";
